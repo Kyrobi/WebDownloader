@@ -1,0 +1,5 @@
+fastapi
+Jinja2
+yt-dlp
+python-multipart
+uvicorn

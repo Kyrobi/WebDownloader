@@ -2,6 +2,7 @@ import yt_dlp
 import os
 import uuid
 import time
+import re
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -14,10 +15,6 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 MAX_VIDEO_LENGTH_MINUTES = 30
-
-# TODO
-# 2. Cap max amount of video stored on the server to X at a time
-# 3. Rate limit?
 
 # Set up FastAPi config
 app = FastAPI()
@@ -89,6 +86,7 @@ async def download_video(request: Request, url: str = Form(...)):
         output_file = folder + title_placeholder + " " + unique_id + "." + extension_placeholder
         
         ydl_opts = {
+            'cookiefile': "cookies.txt",
             'outtmpl': output_file,
             'format': 'best',
             'quiet': True,
@@ -127,7 +125,7 @@ async def download_video(request: Request, url: str = Form(...)):
                 {
                     "request": request,
                     "download_url": f"/download/{os.path.basename(final_filename)}",
-                    "filename": os.path.basename(final_filename),
+                    "filename": os.path.basename(remove_uuid_from_string(final_filename)),
                     "success": True  # Add success flag for template
                 }
             )
@@ -183,13 +181,19 @@ def get_current_time_ampm() -> str:
     now = datetime.now()
     return now.strftime("%m/%d/%Y %I:%M %p")
 
+def remove_uuid_from_string(input_string: str) -> str:
+    uuid_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+    result = re.sub(uuid_pattern, '', input_string)
+    result = result.replace('--', '-').replace('  ', ' ').strip()
+    return result
+
 def log_to_file(title: str, link: str):
-    with open("video_log.txt", 'a') as file:
+    with open("video_log.txt", 'a', encoding="utf-8") as file:
         file.write(get_current_time_ampm() + ";;;" + title + ";;;" + link + '\n')
 
 
 def log_to_file_raw(requestType: str, text: str):
-    with open("raw.txt", 'a') as file:
+    with open("raw.txt", 'a', encoding="utf-8") as file:
         file.write(get_current_time_ampm() + ";;;" + requestType + ";;;" + text + '\n')
 
 if __name__ == "__main__":
