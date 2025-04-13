@@ -2,7 +2,6 @@ import yt_dlp
 import os
 import uuid
 import time
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -11,6 +10,10 @@ from fastapi.templating import Jinja2Templates
 
 from threading import Thread
 from pathlib import Path
+from datetime import datetime
+from urllib.parse import urlparse
+
+MAX_VIDEO_LENGTH_MINUTES = 30
 
 # TODO
 # 2. Cap max amount of video stored on the server to X at a time
@@ -60,7 +63,7 @@ async def home(request: Request):
 
 @app.post("/download")
 async def download_video(request: Request, url: str = Form(...)):
-
+    log_to_file_raw("POST", url)
     if not validateURL(url):
         return templates.TemplateResponse(
             "index.html",
@@ -89,8 +92,23 @@ async def download_video(request: Request, url: str = Form(...)):
             'outtmpl': output_file,
             'format': 'best',
             'quiet': True,
-            'noplaylist': True,  # Add this to download only single videos
+            'noplaylist': True,  # Only allow single videos
         }
+
+        # Check for length of the video.
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            video_length = info.get('duration')
+            if video_length > 60 * MAX_VIDEO_LENGTH_MINUTES:
+                log_to_file(info.get('title'), url)
+                return templates.TemplateResponse(
+                    "index.html",
+                    {
+                        "request": request,
+                        "error": f"Video is too long. Max length: {MAX_VIDEO_LENGTH_MINUTES} minutes",
+                        "success": False 
+                    }
+                )
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -103,7 +121,7 @@ async def download_video(request: Request, url: str = Form(...)):
             
             print(final_filename)
             delete_file_after_delay(final_filename)
-
+            log_to_file(info.get('title'), url)
             return templates.TemplateResponse(
                 "index.html",
                 {
@@ -128,6 +146,7 @@ async def download_video(request: Request, url: str = Form(...)):
 # Endpoint to request the item to download
 @app.get("/download/{filename}")
 async def get_video(filename: str):
+    log_to_file_raw("GET", filename)
     filepath = f"videos/{filename}"
     
     if not os.path.exists(filepath):
@@ -160,6 +179,18 @@ def delete_file_after_delay(file_path: str):
     # Start the deletion thread
     Thread(target=_delete_file, daemon=True).start()
 
+def get_current_time_ampm() -> str:
+    now = datetime.now()
+    return now.strftime("%m/%d/%Y %I:%M %p")
+
+def log_to_file(title: str, link: str):
+    with open("video_log.txt", 'a') as file:
+        file.write(get_current_time_ampm() + ";;;" + title + ";;;" + link + '\n')
+
+
+def log_to_file_raw(requestType: str, text: str):
+    with open("raw.txt", 'a') as file:
+        file.write(get_current_time_ampm() + ";;;" + requestType + ";;;" + text + '\n')
 
 if __name__ == "__main__":
     import uvicorn
