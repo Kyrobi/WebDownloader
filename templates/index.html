@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Downloader</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center;">Video Downloader</h1>
+        
+        <!-- Simple form that submits to /download -->
+        <form method="POST" action="/download" style="text-align: center;">
+            <input type="text" name="url" style="text-align: center;" placeholder="Enter video link" required>
+            <button type="submit" >Download</button>
+        </form>
+
+        <!-- This will show the download link if available -->
+        {% if download_url %}
+        <div class="success">
+            <p>Download ready!</p>
+            <a href="{{ download_url }}" download>
+                <button>Download {{ filename }}</button>
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- This will show errors if any -->
+        {% if error %}
+        <div class="error">
+            Error: {{ error }}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
