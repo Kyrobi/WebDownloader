@@ -3,6 +3,7 @@ import os
 import uuid
 import time
 import re
+import config
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -85,18 +86,34 @@ async def download_video(request: Request, url: str = Form(...)):
         # Creates the directory and file name of the video
         output_file = folder + title_placeholder + " " + unique_id + "." + extension_placeholder
         
-        ydl_opts = {
-            'cookiefile': "cookies.txt",
-            'outtmpl': output_file,
-            'format': 'best',
-            'quiet': True,
-            'noplaylist': True,  # Only allow single videos
-        }
+        ydl_opts = None
+
+        # Only use proxy for YT downloads
+        if "youtube.com" in url or "youtu.be" in url:
+            ydl_opts = {
+                'cookiefile': "cookies.txt",
+                'outtmpl': output_file,
+                'format': 'best',
+                'quiet': True,
+                'noplaylist': True,  # Only allow single videos
+                'proxy': config.PROXY_ADDRESS,
+            }
+        else:
+            ydl_opts = {
+                'cookiefile': "cookies.txt",
+                'outtmpl': output_file,
+                'format': 'best',
+                'quiet': True,
+                'noplaylist': True,  # Only allow single videos
+            }
 
         # Check for length of the video.
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Get video info once (without downloading)
             info = ydl.extract_info(url, download=False)
             video_length = info.get('duration')
+            
+            # Check video length
             if video_length > 60 * MAX_VIDEO_LENGTH_MINUTES:
                 log_to_file(info.get('title'), url)
                 return templates.TemplateResponse(
@@ -107,9 +124,9 @@ async def download_video(request: Request, url: str = Form(...)):
                         "success": False 
                     }
                 )
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            
+            
+            ydl.process_info(info) # This function actually starts the video download
             filename = ydl.prepare_filename(info)
             
             # Get clean filename without temporary .part extension
@@ -126,7 +143,7 @@ async def download_video(request: Request, url: str = Form(...)):
                     "request": request,
                     "download_url": f"/download/{os.path.basename(final_filename)}",
                     "filename": os.path.basename(remove_uuid_from_string(final_filename)),
-                    "success": True  # Add success flag for template
+                    "success": True
                 }
             )
             
